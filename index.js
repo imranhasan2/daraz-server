@@ -35,8 +35,9 @@ async function run() {
 
         app.get('/products', async (req, res) => {
             try {
-                const query = req.query.search
-                console.log(query)
+                const query = req.query.search || "";
+                const sortPrice=req.query.sortPrice || 'priceLowToHigh'
+                console.log(sortPrice)
 
                 const filter = {
                     name:{
@@ -45,7 +46,42 @@ async function run() {
                     }
                 }
 
-                const result = await productCollection.find(filter).toArray();
+
+                const sortPrices ={
+
+                    
+                    priceLowToHigh:{priceNumber : 1},
+                    priceHighToLow:{priceNumber : -1},
+                    dateNewest:{createdAt : -1}
+
+
+                }
+
+                const sortOrder = sortPrices[sortPrice] || { priceNumber: 1 }
+
+
+                const pipeline =[
+                    {
+
+                    $match:filter
+                },{
+
+                    $addFields :{
+                       priceNumber:{ $convert: {
+                        input: "$price",
+                        to: "double",
+                        onError: null,   // Handle conversion errors gracefully
+                        onNull: null     // Handle null values
+                    }
+                }
+                    }
+                },
+                
+                {    $sort :sortOrder}
+            
+            ]
+
+                const result = await productCollection.aggregate(pipeline).toArray();
                 res.send(result);
 
             } catch (error) {
