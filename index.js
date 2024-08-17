@@ -35,9 +35,19 @@ async function run() {
 
         app.get('/products', async (req, res) => {
             try {
-                const result = await productCollection.find().toArray();
+                const query = req.query.search
+                console.log(query)
+
+                const filter = {
+                    name:{
+                        $regex:query,
+                        $options: 'i'
+                    }
+                }
+
+                const result = await productCollection.find(filter).toArray();
                 res.send(result);
-                
+
             } catch (error) {
                 console.error('Error fetching products:', error);
                 res.status(500).send('Internal Server Error');
