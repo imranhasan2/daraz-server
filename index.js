@@ -29,30 +29,44 @@ async function run() {
 
         const productCollection = client.db('darazDB').collection('products')
         // Connect the client to the server	(optional starting in v4.7)
-        await client.connect();
+        // await client.connect();
 
         // get products from database
 
         app.get('/products', async (req, res) => {
             try {
                 const query = req.query.search || "";
-                const sortPrice=req.query.sortPrice || 'priceLowToHigh'
-                console.log(sortPrice)
+                const sortPrice = req.query.sortPrice || 'priceLowToHigh'
+                const limit = parseInt(req.query.limit, 10) || 5;
+                const page = parseInt(req.query.page, 10) || 1;
+                const brand = req.query.brand || '';
+                const category = req.query.category || '';
+                const price = req.query.price || '';
+
 
                 const filter = {
-                    name:{
-                        $regex:query,
+                    name: {
+                        $regex: query,
                         $options: 'i'
                     }
                 }
 
+                if (brand) filter.brand = brand;
+                if (category) filter.category = category;
+                if (price) {
+                    const [minPrice, maxPrice] = price.split('-').map(Number);
+                   
+                    filter.priceNumber = { $gte: minPrice, $lte: maxPrice };
+                }
 
-                const sortPrices ={
 
-                    
-                    priceLowToHigh:{priceNumber : 1},
-                    priceHighToLow:{priceNumber : -1},
-                    dateNewest:{createdAt : -1}
+
+                const sortPrices = {
+
+
+                    priceLowToHigh: { priceNumber: 1 },
+                    priceHighToLow: { priceNumber: -1 },
+                    dateNewest: { createdAt: -1 }
 
 
                 }
@@ -60,29 +74,34 @@ async function run() {
                 const sortOrder = sortPrices[sortPrice] || { priceNumber: 1 }
 
 
-                const pipeline =[
+                const pipeline = [
                     {
 
-                    $match:filter
-                },{
+                        $match: filter
+                    }, {
 
-                    $addFields :{
-                       priceNumber:{ $convert: {
-                        input: "$price",
-                        to: "double",
-                        onError: null,   // Handle conversion errors gracefully
-                        onNull: null     // Handle null values
-                    }
-                }
-                    }
-                },
-                
-                {    $sort :sortOrder}
-            
-            ]
+                        $addFields: {
+                            priceNumber: {
+                                $convert: {
+                                    input: "$price",
+                                    to: "double",
+                                    onError: null,
+                                    onNull: null
+                                }
+                            }
+                        }
+                    },
+
+                    { $sort: sortOrder },
+                    { $skip: (page - 1) * limit },
+                    { $limit: limit }
+
+                ]
 
                 const result = await productCollection.aggregate(pipeline).toArray();
-                res.send(result);
+                const totalCount = await productCollection.countDocuments(filter);
+
+                res.send({ result, totalCount });
 
             } catch (error) {
                 console.error('Error fetching products:', error);
@@ -93,8 +112,8 @@ async function run() {
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
